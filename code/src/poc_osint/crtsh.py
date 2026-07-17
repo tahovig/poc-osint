@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+from collections.abc import Callable
 
 import asyncpg
 import httpx
@@ -27,12 +28,21 @@ POSTGRES_QUERY = (
 
 _WILDCARD_PREFIX = re.compile(r"^\*\.")
 
+Progress = Callable[[str], None] | None
+
 
 class CrtShError(Exception):
     """Raised when crt.sh can't be queried successfully after retries."""
 
 
-async def fetch_crtsh_json(domain: str, client: httpx.AsyncClient) -> list[dict]:
+def _report(on_progress: Progress, message: str) -> None:
+    if on_progress:
+        on_progress(message)
+
+
+async def fetch_crtsh_json(
+    domain: str, client: httpx.AsyncClient, *, on_progress: Progress = None
+) -> list[dict]:
     """Fetch raw certificate transparency log entries for a domain from crt.sh.
 
     crt.sh is known to be flaky/rate-limited, so failures are retried with
@@ -52,6 +62,10 @@ async def fetch_crtsh_json(domain: str, client: httpx.AsyncClient) -> list[dict]
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             last_error = exc
             if attempt < MAX_ATTEMPTS:
+                _report(
+                    on_progress,
+                    f"crt.sh HTTP request failed (attempt {attempt}/{MAX_ATTEMPTS}), retrying...",
+                )
                 await asyncio.sleep(BACKOFF_BASE_SECONDS * 2 ** (attempt - 1))
 
     raise CrtShError(
@@ -59,7 +73,7 @@ async def fetch_crtsh_json(domain: str, client: httpx.AsyncClient) -> list[dict]
     ) from last_error
 
 
-async def fetch_crtsh_postgres(domain: str) -> list[dict]:
+async def fetch_crtsh_postgres(domain: str, *, on_progress: Progress = None) -> list[dict]:
     """Fallback fetch path: query crt.sh's public Postgres instance directly.
 
     Same authoritative data as `fetch_crtsh_json`, different transport --
@@ -67,6 +81,8 @@ async def fetch_crtsh_postgres(domain: str) -> list[dict]:
     handles either source unchanged (it already filters out the CA-name and
     email-SAN noise this looser query can surface).
     """
+    _report(on_progress, "crt.sh HTTP unavailable -- falling back to direct database query...")
+
     try:
         conn = await asyncio.wait_for(
             asyncpg.connect(
@@ -105,7 +121,7 @@ def extract_subdomains(entries: list[dict], domain: str) -> set[str]:
     return subdomains
 
 
-async def get_subdomains(domain: str) -> set[str]:
+async def get_subdomains(domain: str, *, on_progress: Progress = None) -> set[str]:
     """Query crt.sh and return the deduplicated subdomains found for `domain`.
 
     Tries the HTTP/JSON API first; falls back to direct Postgres access if
@@ -113,10 +129,10 @@ async def get_subdomains(domain: str) -> set[str]:
     """
     try:
         async with httpx.AsyncClient() as client:
-            entries = await fetch_crtsh_json(domain, client)
+            entries = await fetch_crtsh_json(domain, client, on_progress=on_progress)
     except CrtShError:
         try:
-            entries = await fetch_crtsh_postgres(domain)
+            entries = await fetch_crtsh_postgres(domain, on_progress=on_progress)
         except CrtShError as postgres_error:
             raise CrtShError(
                 f"crt.sh query failed for {domain!r} via both HTTP and Postgres"

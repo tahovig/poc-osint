@@ -22,7 +22,7 @@ DEAD = HostResult(
 
 
 async def test_run_recon_wires_subdomains_into_liveness_and_headers(monkeypatch):
-    async def fake_get_subdomains(domain):
+    async def fake_get_subdomains(domain, **kwargs):
         return {"www.example.com", "dead.example.com"}
 
     async def fake_get_live_hosts(hosts, **kwargs):
@@ -48,7 +48,7 @@ async def test_run_recon_wires_subdomains_into_liveness_and_headers(monkeypatch)
 
 
 async def test_run_recon_skips_liveness_when_no_subdomains_found(monkeypatch):
-    async def fake_get_subdomains(domain):
+    async def fake_get_subdomains(domain, **kwargs):
         return set()
 
     async def fake_get_live_hosts(hosts, **kwargs):
@@ -65,7 +65,7 @@ async def test_run_recon_skips_liveness_when_no_subdomains_found(monkeypatch):
 async def test_run_recon_passes_through_concurrency_and_delay(monkeypatch):
     captured_kwargs = {}
 
-    async def fake_get_subdomains(domain):
+    async def fake_get_subdomains(domain, **kwargs):
         return {"example.com"}
 
     async def fake_get_live_hosts(hosts, **kwargs):
@@ -77,13 +77,14 @@ async def test_run_recon_passes_through_concurrency_and_delay(monkeypatch):
 
     await run_recon("example.com", max_concurrency=3, delay=0.1)
 
-    assert captured_kwargs == {"max_concurrency": 3, "delay": 0.1}
+    assert captured_kwargs["max_concurrency"] == 3
+    assert captured_kwargs["delay"] == 0.1
 
 
 async def test_run_recon_reports_progress_through_each_stage(monkeypatch):
     messages = []
 
-    async def fake_get_subdomains(domain):
+    async def fake_get_subdomains(domain, **kwargs):
         return {"www.example.com"}
 
     async def fake_get_live_hosts(hosts, **kwargs):
@@ -100,7 +101,7 @@ async def test_run_recon_reports_progress_through_each_stage(monkeypatch):
 
 
 async def test_run_recon_progress_is_optional(monkeypatch):
-    async def fake_get_subdomains(domain):
+    async def fake_get_subdomains(domain, **kwargs):
         return {"example.com"}
 
     async def fake_get_live_hosts(hosts, **kwargs):
@@ -112,3 +113,24 @@ async def test_run_recon_progress_is_optional(monkeypatch):
     reports = await run_recon("example.com")  # no on_progress -- must not raise
 
     assert len(reports) == 1
+
+
+async def test_run_recon_passes_on_progress_down_to_get_subdomains_and_get_live_hosts(monkeypatch):
+    received = {}
+
+    async def fake_get_subdomains(domain, **kwargs):
+        received["get_subdomains_on_progress"] = kwargs.get("on_progress")
+        return {"example.com"}
+
+    async def fake_get_live_hosts(hosts, **kwargs):
+        received["get_live_hosts_on_progress"] = kwargs.get("on_progress")
+        return [LIVE_HEALTHY]
+
+    monkeypatch.setattr("poc_osint.recon.get_subdomains", fake_get_subdomains)
+    monkeypatch.setattr("poc_osint.recon.get_live_hosts", fake_get_live_hosts)
+
+    callback = lambda message: None
+    await run_recon("example.com", on_progress=callback)
+
+    assert received["get_subdomains_on_progress"] is callback
+    assert received["get_live_hosts_on_progress"] is callback

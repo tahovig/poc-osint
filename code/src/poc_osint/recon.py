@@ -37,13 +37,13 @@ async def run_recon(
             on_progress(message)
 
     report(f"Querying crt.sh for {domain}...")
-    subdomains = await get_subdomains(domain)
+    subdomains = await get_subdomains(domain, on_progress=on_progress)
     if not subdomains:
         return []
 
     report(f"Checking liveness of {len(subdomains)} subdomain(s)...")
     live_results = await get_live_hosts(
-        sorted(subdomains), max_concurrency=max_concurrency, delay=delay
+        sorted(subdomains), max_concurrency=max_concurrency, delay=delay, on_progress=on_progress
     )
 
     report("Analyzing headers...")

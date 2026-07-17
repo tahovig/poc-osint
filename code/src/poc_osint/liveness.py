@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
@@ -50,24 +51,35 @@ async def check_hosts(
     ports: tuple[int, ...] = (80, 443),
     max_concurrency: int = 10,
     delay: float = 0.0,
+    on_progress: Callable[[str], None] | None = None,
 ) -> list[HostResult]:
     """Concurrently HEAD-check `hosts` across `ports`.
 
     `max_concurrency` bounds simultaneous in-flight requests and `delay` is
     applied before each one -- both exist to avoid hammering target
-    infrastructure, not just for throughput tuning.
+    infrastructure, not just for throughput tuning. `on_progress`, if given,
+    is called with a live "N/total complete" message as each check finishes
+    (no lock needed for the counter -- asyncio has no preemption between
+    awaits, so the increment is safe as plain synchronous code).
     """
     if max_concurrency < 1:
         raise ValueError("max_concurrency must be at least 1")
 
     semaphore = asyncio.Semaphore(max_concurrency)
+    total = len(hosts) * len(ports)
+    completed = 0
 
     async def _bounded_check(host: str, port: int) -> HostResult:
+        nonlocal completed
         async with semaphore:
             if delay:
                 await asyncio.sleep(delay)
             scheme = PORT_SCHEMES.get(port, "http")
-            return await check_host_port(client, host, port, scheme)
+            result = await check_host_port(client, host, port, scheme)
+        completed += 1
+        if on_progress:
+            on_progress(f"Checking liveness: {completed}/{total} complete...")
+        return result
 
     tasks = [_bounded_check(host, port) for host in hosts for port in ports]
     return await asyncio.gather(*tasks)

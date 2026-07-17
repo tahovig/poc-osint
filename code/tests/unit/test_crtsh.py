@@ -131,10 +131,10 @@ async def test_fetch_crtsh_postgres_raises_on_query_failure_and_still_closes(mon
 
 
 async def test_get_subdomains_uses_http_when_available(monkeypatch):
-    async def fake_json(domain, client):
+    async def fake_json(domain, client, **kwargs):
         return [{"name_value": "example.com"}]
 
-    async def fake_postgres(domain):
+    async def fake_postgres(domain, **kwargs):
         raise AssertionError("Postgres fallback should not be used when HTTP succeeds")
 
     monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_json", fake_json)
@@ -146,10 +146,10 @@ async def test_get_subdomains_uses_http_when_available(monkeypatch):
 
 
 async def test_get_subdomains_falls_back_to_postgres_on_http_failure(monkeypatch):
-    async def fake_json(domain, client):
+    async def fake_json(domain, client, **kwargs):
         raise CrtShError("http down")
 
-    async def fake_postgres(domain):
+    async def fake_postgres(domain, **kwargs):
         return [{"name_value": "example.com"}]
 
     monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_json", fake_json)
@@ -161,10 +161,10 @@ async def test_get_subdomains_falls_back_to_postgres_on_http_failure(monkeypatch
 
 
 async def test_get_subdomains_raises_when_both_sources_fail(monkeypatch):
-    async def fake_json(domain, client):
+    async def fake_json(domain, client, **kwargs):
         raise CrtShError("http down")
 
-    async def fake_postgres(domain):
+    async def fake_postgres(domain, **kwargs):
         raise CrtShError("postgres down")
 
     monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_json", fake_json)
@@ -172,3 +172,34 @@ async def test_get_subdomains_raises_when_both_sources_fail(monkeypatch):
 
     with pytest.raises(CrtShError, match="both HTTP and Postgres"):
         await get_subdomains("example.com")
+
+
+@respx.mock
+async def test_fetch_crtsh_json_reports_retry_progress(monkeypatch):
+    monkeypatch.setattr("poc_osint.crtsh.asyncio.sleep", _no_sleep)
+    messages = []
+    respx.get("https://crt.sh/").mock(
+        side_effect=[
+            httpx.Response(503),
+            httpx.Response(200, json=[{"name_value": "example.com"}]),
+        ]
+    )
+
+    async with httpx.AsyncClient() as client:
+        await fetch_crtsh_json("example.com", client, on_progress=messages.append)
+
+    assert any("attempt 1/3" in m for m in messages)
+
+
+async def test_fetch_crtsh_postgres_reports_progress(monkeypatch):
+    fake_conn = FakeConnection(rows=[{"name_value": "example.com"}])
+    messages = []
+
+    async def fake_connect(**kwargs):
+        return fake_conn
+
+    monkeypatch.setattr("poc_osint.crtsh.asyncpg.connect", fake_connect)
+
+    await fetch_crtsh_postgres("example.com", on_progress=messages.append)
+
+    assert any("falling back" in m.lower() and "database" in m.lower() for m in messages)

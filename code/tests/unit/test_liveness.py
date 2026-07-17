@@ -95,3 +95,17 @@ async def test_check_hosts_maps_ports_to_expected_schemes():
     assert https_route.called
     schemes = {r.port: r.scheme for r in results}
     assert schemes == {80: "http", 443: "https"}
+
+
+@respx.mock
+async def test_check_hosts_reports_live_completion_count():
+    messages = []
+    respx.head(url__regex=r".*").mock(return_value=httpx.Response(200))
+
+    hosts = [f"host{i}.example.com" for i in range(3)]
+    async with httpx.AsyncClient() as client:
+        await check_hosts(client, hosts, ports=(80,), on_progress=messages.append)
+
+    assert len(messages) == 3  # one per completed check
+    assert messages[-1] == "Checking liveness: 3/3 complete..."
+    assert all(msg.startswith("Checking liveness:") for msg in messages)
