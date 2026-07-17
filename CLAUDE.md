@@ -6,7 +6,7 @@ OSINT (Open Source Intelligence) proof-of-concept — first in a series of portf
 
 ## Repo
 
-[https://github.com/tahovig/poc-osint.git](https://github.com/tahovig/poc-osint.git) — created empty on GitHub, not yet pushed to.
+[https://github.com/tahovig/poc-osint.git](https://github.com/tahovig/poc-osint.git) — `main` + `develop` pushed.
 
 ## Branch strategy
 
@@ -18,6 +18,7 @@ OSINT (Open Source Intelligence) proof-of-concept — first in a series of portf
 - Working directory is `~/dev-projects/tah-osint-poc` (WSL native filesystem) — this is the real, permanent working folder. The earlier Windows scaffold at `D:\tah-projects\poc-osint` is abandoned; nothing from it has been carried over.
 - Decided: primary development happens in WSL Ubuntu via Claude Code CLI, not in Cowork mode.
 - Git repo initialized. `main` has the initial commit (README, .gitignore, `code/`, `resources/`, CLAUDE.md); `develop` branched from it and is the active working branch. Both pushed to GitHub (`origin`), tracking branches set.
+- Docker installed via `apt` (`docker.io` + `docker-compose` v1 — Ubuntu 20.04's repos, not the v2 `docker compose` plugin). This WSL distro has no systemd (`systemctl is-system-running` → offline), so `service docker start` doesn't work — daemon must be started manually with `sudo dockerd &` each fresh WSL session. Also had to clear a stale `credsStore: desktop.exe` entry from `~/.docker/config.json` (leftover Docker Desktop reference) before builds would run.
 
 ## Tech stack
 
@@ -40,13 +41,13 @@ Automates initial recon against a target domain — gathers publicly available s
 - README includes an explicit "Authorized use only" section; tool takes target as an explicit CLI arg, never a bundled/default target list.
 
 **Test/demo targets** (decided after checking real authorization status — OWASP has no bug bounty/VDP covering owasp.org itself, ruled out; Tesla's Bugcrowd program is real but only partial safe harbor with a 24h disclosure obligation, not a great fit for repeated demo runs; NASA's VDP is legitimate but scoped to a specific listed target set that would need checking before use):
-- **Automated tests / CI**: localhost + Docker fixtures (lightweight local HTTP servers/containers) — zero legal ambiguity, deterministic. Not yet built — part of scaffolding.
+- **Automated tests / CI**: localhost + Docker fixtures, built at `code/tests/fixtures/` (`server.py` + `Dockerfile` + `docker-compose.yml`). One image, two configured services: `healthy-host` (`:8081`, full security-header checklist, generic banner) and `vulnerable-host` (`:8082`, no security headers, fake `Server`/`X-Powered-By`). Port `8083` is reserved unused as the "dead host" case (connection-refused path). Verified end-to-end (GET + HEAD, correct headers per host, dead port refuses connections) — zero legal ambiguity, deterministic.
 - **Smoke test**: `example.com` (IANA-run, stable, exists for exactly this purpose).
 - Real-target demo (NASA VDP in-scope list, or a domain the user owns) deferred until later — not needed to start building.
 
 ## Open decisions / immediate next steps
 
-1. Build local Docker/HTTP-server test fixtures (needed for CI since no live target is set up yet).
+1. Build the actual CLI tool (`code/` package skeleton, crt.sh client, async liveness checker, header parser) against the fixtures above.
 
 ## Working preferences
 
