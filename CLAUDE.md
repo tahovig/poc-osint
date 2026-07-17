@@ -17,7 +17,7 @@ OSINT (Open Source Intelligence) proof-of-concept — first in a series of portf
 
 - Working directory is `~/dev-projects/tah-osint-poc` (WSL native filesystem) — this is the real, permanent working folder. The earlier Windows scaffold at `D:\tah-projects\poc-osint` is abandoned; nothing from it has been carried over.
 - Decided: primary development happens in WSL Ubuntu via Claude Code CLI, not in Cowork mode.
-- Git repo initialized locally. `main` has the initial commit (README, .gitignore, `code/`, `resources/`, CLAUDE.md); `develop` branched from it and is the active working branch. Not yet pushed to GitHub.
+- Git repo initialized. `main` has the initial commit (README, .gitignore, `code/`, `resources/`, CLAUDE.md); `develop` branched from it and is the active working branch. Both pushed to GitHub (`origin`), tracking branches set.
 
 ## Tech stack
 
@@ -46,8 +46,7 @@ Automates initial recon against a target domain — gathers publicly available s
 
 ## Open decisions / immediate next steps
 
-1. Push `main` \+ `develop` to GitHub (remote already exists, empty).
-2. Build local Docker/HTTP-server test fixtures (needed for CI since no live target is set up yet).
+1. Build local Docker/HTTP-server test fixtures (needed for CI since no live target is set up yet).
 
 ## Working preferences
 
