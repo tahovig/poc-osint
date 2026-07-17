@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -8,10 +9,22 @@ import pytest
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
 
+def _compose_command() -> list[str]:
+    """Prefer the v2 `docker compose` plugin (GitHub Actions runners), fall back
+    to the standalone v1 `docker-compose` binary (this project's local dev setup,
+    since Ubuntu 20.04's apt repos only ship v1)."""
+    if shutil.which("docker") and subprocess.run(
+        ["docker", "compose", "version"], capture_output=True
+    ).returncode == 0:
+        return ["docker", "compose"]
+    return ["docker-compose"]
+
+
 @pytest.fixture(scope="session")
 def docker_fixtures():
+    compose = _compose_command()
     subprocess.run(
-        ["docker-compose", "up", "-d", "--build"],
+        [*compose, "up", "-d", "--build"],
         cwd=FIXTURES_DIR,
         check=True,
         capture_output=True,
@@ -22,7 +35,7 @@ def docker_fixtures():
         yield
     finally:
         subprocess.run(
-            ["docker-compose", "down"],
+            [*compose, "down"],
             cwd=FIXTURES_DIR,
             check=True,
             capture_output=True,
