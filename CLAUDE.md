@@ -71,7 +71,7 @@ Src-layout Python package at `code/`:
 `.github/workflows/ci.yml` — two jobs, both on `push`/`pull_request` to `main`/`develop`:
 - `unit`: matrix over Python 3.11/3.12, `pip install -e ".[dev]"` + `pytest` (default `addopts` already excludes `integration`-marked tests — no Docker needed).
 - `integration`: single Python 3.11 run, `pytest -m integration` against the Docker fixtures. GitHub-hosted `ubuntu-latest` runners ship Docker + the Compose v2 plugin (`docker compose`, no hyphen) by default, which differs from this local dev setup's v1 binary (`docker-compose`, hyphenated — Ubuntu 20.04's apt repos don't ship the v2 plugin). `tests/integration/conftest.py::_compose_command()` detects which is available and uses that, so the same fixture code works in both places.
-- Not yet confirmed green on GitHub itself — no `gh` CLI in this environment to check Actions run status after pushing (would need install + auth). Check the Actions tab on GitHub after the next push, or say the word and I'll set up `gh` (needs `sudo`, same terminal-prompt caveat as the earlier Docker install).
+- **Confirmed green on GitHub**: `gh` CLI now installed + authenticated (classic PAT needed `read:org` + `workflow` scopes added on top of the `repo` scope already used for git push — same token, scopes edited in place at github.com/settings/tokens, no new token needed). All 3 jobs passed on first real run (`unit` 3.11, `unit` 3.12, `integration` — the last one confirming the runner really does use Compose v2 and the fallback logic picks it correctly).
 
 ## Future consideration: presenting/comparing findings visually
 
@@ -79,11 +79,10 @@ Flagged by the user as something to keep in mind going forward, not building now
 
 ## Open decisions / immediate next steps
 
-The core tool is functionally complete end-to-end (crt.sh → liveness → headers → output), with CI wired up. Remaining items are polish, not core functionality:
+The core tool is functionally complete end-to-end (crt.sh → liveness → headers → output), with CI green on GitHub. Remaining items are polish, not core functionality:
 1. README: replace "planned functionality" language with actual usage docs/example output now that `lookup` really works.
 2. Consider the crt.sh direct-PostgreSQL fallback (see reliability note above) if live flakiness proves annoying in practice.
-3. Confirm the CI workflow is actually green on GitHub (see CI section above).
-4. Results visualization/comparison across runs (see Future consideration above) — not scoped/prioritized yet.
+3. Results visualization/comparison across runs (see Future consideration above) — not scoped/prioritized yet.
 
 ## Working preferences
 
