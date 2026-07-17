@@ -34,23 +34,17 @@ poc-osint-venv/bin/pip install -e ".[dev]"
 poc-osint-venv/bin/poc-osint lookup example.com
 ```
 
-Example output (real run against `example.com`):
+Example output (real run against `example.com`) — the CSP/HSTS/XFO/XCTO/RP columns are the security-header checklist, `✓`/`✗`/`-` (not applicable, host is dead):
 
 ```
-HOST                 | PORT | LIVE | STATUS | SERVER     | MISSING HEADERS | FINGERPRINT
----------------------+------+------+--------+------------+-----------------+------------
-dev.example.com      | 80   | no   | -      | -          | -               | -
-dev.example.com      | 443  | no   | -      | -          | -               | -
-example.com          | 80   | yes  | 200    | cloudflare | 5               | Cloudflare
-example.com          | 443  | yes  | 200    | cloudflare | 5               | Cloudflare
-m.example.com        | 80   | no   | -      | -          | -               | -
-m.example.com        | 443  | no   | -      | -          | -               | -
-products.example.com | 80   | no   | -      | -          | -               | -
-products.example.com | 443  | no   | -      | -          | -               | -
-support.example.com  | 80   | no   | -      | -          | -               | -
-support.example.com  | 443  | no   | -      | -          | -               | -
-www.example.com      | 80   | yes  | 200    | cloudflare | 5               | Cloudflare
-www.example.com      | 443  | yes  | 200    | cloudflare | 5               | Cloudflare
+HOST                 | PORT | LIVE | STATUS | SERVER     | CSP | HSTS | XFO | XCTO | RP | FINGERPRINT
+---------------------+------+------+--------+------------+-----+------+-----+------+----+------------
+dev.example.com      | 80   | no   | -      | -          | -   | -    | -   | -    | -  | -
+dev.example.com      | 443  | no   | -      | -          | -   | -    | -   | -    | -  | -
+example.com          | 80   | yes  | 200    | cloudflare | ✗   | ✗    | ✗   | ✗    | ✗  | Cloudflare
+example.com          | 443  | yes  | 200    | cloudflare | ✗   | ✗    | ✗   | ✗    | ✗  | Cloudflare
+www.example.com      | 80   | yes  | 200    | cloudflare | ✗   | ✗    | ✗   | ✗    | ✗  | Cloudflare
+www.example.com      | 443  | yes  | 200    | cloudflare | ✗   | ✗    | ✗   | ✗    | ✗  | Cloudflare
 ```
 
 Flags:
@@ -58,6 +52,26 @@ Flags:
 - `--max-concurrency N` — max simultaneous liveness checks (default: 10)
 - `--delay SECONDS` — delay before each liveness check, to further throttle request rate (default: 0.0)
 - `--json` — output JSON instead of the table above
+- `--save PATH` — also save the result as JSON to PATH (regardless of `--json`), for later `compare`
+
+### Comparing scans over time
+
+Save results from two points in time, then diff them — surfaces newly-appeared/disappeared subdomains, live/dead state changes, and new header/fingerprint findings. This is the tool's answer to "what changed on our attack surface since last time," directly in service of spotting forgotten/rogue shadow IT assets:
+
+```
+poc-osint-venv/bin/poc-osint lookup example.com --save scans/2026-01-01.json
+poc-osint-venv/bin/poc-osint lookup example.com --save scans/2026-02-01.json
+poc-osint-venv/bin/poc-osint compare scans/2026-01-01.json scans/2026-02-01.json
+```
+
+```
++ ADDED    www.example.com:80
++ ADDED    www.example.com:443
+- REMOVED  legacy.example.com:80
+~ CHANGED  example.com:443  missing headers: 0 -> 5
+```
+
+`--json` works on `compare` too, for piping into other tooling.
 
 ## Testing
 
@@ -74,4 +88,4 @@ poc-osint-venv/bin/pytest -m integration  # integration tests against local Dock
 
 ## Tech stack
 
-Python (`httpx`, asyncio), pytest + respx for testing, Docker for local test fixtures, GitHub Actions for CI. See `CLAUDE.md` for full design notes and rationale.
+Python (`httpx`, `asyncpg`, asyncio), pytest + respx for testing, Docker for local test fixtures, GitHub Actions for CI. See `CLAUDE.md` for full design notes and rationale.
