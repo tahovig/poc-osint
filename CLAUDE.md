@@ -49,11 +49,12 @@ Automates initial recon against a target domain — gathers publicly available s
 
 Src-layout Python package at `code/`:
 - `pyproject.toml` — setuptools build, console script entry point `poc-osint = poc_osint.cli:main`. Runtime dep: `httpx`. Dev deps (`.[dev]`): `pytest`, `pytest-asyncio`, `respx`.
-- `src/poc_osint/cli.py` — argparse-based CLI, subcommand-structured (`poc-osint lookup <target>`). Only real functionality so far: domain-format validation; recon logic itself is not yet implemented (prints a placeholder message) — crt.sh client, liveness checker, and header parser modules don't exist yet, will be added when actually built rather than stubbed in advance.
-- `tests/unit/test_cli.py` — covers valid/invalid domain handling and missing-subcommand exit behavior.
+- `src/poc_osint/cli.py` — argparse-based CLI, subcommand-structured (`poc-osint lookup <target>`). Only real functionality so far: domain-format validation; recon logic itself is not yet wired in (prints a placeholder message) — liveness checker and header parser modules don't exist yet, will be added when actually built rather than stubbed in advance.
+- `src/poc_osint/crtsh.py` — crt.sh client, implemented. `fetch_crtsh_json()` (network layer: GET with timeout + exponential-backoff retry, `CrtShError` after 3 failed attempts) is separate from `extract_subdomains()` (pure parsing: dedupes, lowercases, strips `*.` wildcard prefixes, filters to the queried domain + its subdomains). `get_subdomains()` wires both together. Not yet called from `cli.py` — that wiring happens once liveness/header modules exist too.
+- `tests/unit/test_cli.py`, `tests/unit/test_crtsh.py` — 8/8 passing. crt.sh tests use `respx` to mock httpx (parsing edge cases, retry-then-succeed, retry-exhaustion) — no live network in CI.
 - `tests/fixtures/` — Docker fixtures (see above).
 - Dev venv: `code/poc-osint-venv/` (named for the project rather than generic `.venv`, gitignored). Setup: `python3 -m venv poc-osint-venv && poc-osint-venv/bin/pip install -e ".[dev]"`.
-- Verified end-to-end: `poc-osint-venv/bin/poc-osint lookup example.com` (exit 0), invalid domain (exit 1, stderr message), `pytest` — 3/3 passing.
+- Verified end-to-end: `poc-osint-venv/bin/poc-osint lookup example.com` (exit 0), invalid domain (exit 1, stderr message), `pytest` — 8/8 passing. One-time manual live check of `get_subdomains()` against real crt.sh hit a genuine crt.sh outage (502, confirmed independently via `curl` — not a client bug); retry once crt.sh is back up to confirm real-world parsing.
 
 ## Open decisions / immediate next steps
 
