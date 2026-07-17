@@ -1,8 +1,15 @@
+import asyncpg
 import httpx
 import pytest
 import respx
 
-from poc_osint.crtsh import CrtShError, extract_subdomains, fetch_crtsh_json
+from poc_osint.crtsh import (
+    CrtShError,
+    extract_subdomains,
+    fetch_crtsh_json,
+    fetch_crtsh_postgres,
+    get_subdomains,
+)
 
 SAMPLE_ENTRIES = [
     {"name_value": "www.example.com\nexample.com"},
@@ -14,6 +21,21 @@ SAMPLE_ENTRIES = [
 
 async def _no_sleep(_seconds):
     return None
+
+
+class FakeConnection:
+    def __init__(self, rows=None, fetch_error=None):
+        self._rows = rows or []
+        self._fetch_error = fetch_error
+        self.closed = False
+
+    async def fetch(self, query, domain):
+        if self._fetch_error:
+            raise self._fetch_error
+        return self._rows
+
+    async def close(self):
+        self.closed = True
 
 
 def test_extract_subdomains_parses_dedupes_and_filters():
@@ -66,3 +88,87 @@ async def test_fetch_crtsh_json_raises_after_max_attempts(monkeypatch):
     async with httpx.AsyncClient() as client:
         with pytest.raises(CrtShError):
             await fetch_crtsh_json("example.com", client)
+
+
+async def test_fetch_crtsh_postgres_returns_parsed_entries(monkeypatch):
+    fake_conn = FakeConnection(
+        rows=[{"name_value": "example.com"}, {"name_value": "www.example.com"}]
+    )
+
+    async def fake_connect(**kwargs):
+        return fake_conn
+
+    monkeypatch.setattr("poc_osint.crtsh.asyncpg.connect", fake_connect)
+
+    result = await fetch_crtsh_postgres("example.com")
+
+    assert result == [{"name_value": "example.com"}, {"name_value": "www.example.com"}]
+    assert fake_conn.closed
+
+
+async def test_fetch_crtsh_postgres_raises_on_connect_failure(monkeypatch):
+    async def fake_connect(**kwargs):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("poc_osint.crtsh.asyncpg.connect", fake_connect)
+
+    with pytest.raises(CrtShError):
+        await fetch_crtsh_postgres("example.com")
+
+
+async def test_fetch_crtsh_postgres_raises_on_query_failure_and_still_closes(monkeypatch):
+    fake_conn = FakeConnection(fetch_error=asyncpg.PostgresError("bad query"))
+
+    async def fake_connect(**kwargs):
+        return fake_conn
+
+    monkeypatch.setattr("poc_osint.crtsh.asyncpg.connect", fake_connect)
+
+    with pytest.raises(CrtShError):
+        await fetch_crtsh_postgres("example.com")
+
+    assert fake_conn.closed
+
+
+async def test_get_subdomains_uses_http_when_available(monkeypatch):
+    async def fake_json(domain, client):
+        return [{"name_value": "example.com"}]
+
+    async def fake_postgres(domain):
+        raise AssertionError("Postgres fallback should not be used when HTTP succeeds")
+
+    monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_json", fake_json)
+    monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_postgres", fake_postgres)
+
+    result = await get_subdomains("example.com")
+
+    assert result == {"example.com"}
+
+
+async def test_get_subdomains_falls_back_to_postgres_on_http_failure(monkeypatch):
+    async def fake_json(domain, client):
+        raise CrtShError("http down")
+
+    async def fake_postgres(domain):
+        return [{"name_value": "example.com"}]
+
+    monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_json", fake_json)
+    monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_postgres", fake_postgres)
+
+    result = await get_subdomains("example.com")
+
+    assert result == {"example.com"}
+
+
+async def test_get_subdomains_raises_when_both_sources_fail(monkeypatch):
+    async def fake_json(domain, client):
+        raise CrtShError("http down")
+
+    async def fake_postgres(domain):
+        raise CrtShError("postgres down")
+
+    monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_json", fake_json)
+    monkeypatch.setattr("poc_osint.crtsh.fetch_crtsh_postgres", fake_postgres)
+
+    with pytest.raises(CrtShError, match="both HTTP and Postgres"):
+        await get_subdomains("example.com")
