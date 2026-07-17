@@ -49,20 +49,20 @@ Automates initial recon against a target domain — gathers publicly available s
 
 Src-layout Python package at `code/`:
 - `pyproject.toml` — setuptools build, console script entry point `poc-osint = poc_osint.cli:main`. Runtime dep: `httpx`. Dev deps (`.[dev]`): `pytest`, `pytest-asyncio`, `respx`.
-- `src/poc_osint/cli.py` — argparse-based CLI, subcommand-structured (`poc-osint lookup <target>`). Only real functionality so far: domain-format validation; recon logic itself is not yet wired in (prints a placeholder message) — liveness checker and header parser modules don't exist yet, will be added when actually built rather than stubbed in advance.
+- `src/poc_osint/cli.py` — argparse-based CLI, subcommand-structured (`poc-osint lookup <target>`). Only real functionality so far: domain-format validation; recon logic itself is not yet wired in (prints a placeholder message) — header parser module doesn't exist yet, will be added when actually built rather than stubbed in advance.
 - `src/poc_osint/crtsh.py` — crt.sh client, implemented. `fetch_crtsh_json()` (network layer: GET with timeout + exponential-backoff retry, `CrtShError` after 3 failed attempts) is separate from `extract_subdomains()` (pure parsing: dedupes, lowercases, strips `*.` wildcard prefixes, filters to the queried domain + its subdomains). `get_subdomains()` wires both together. Not yet called from `cli.py` — that wiring happens once liveness/header modules exist too.
-- `tests/unit/test_cli.py`, `tests/unit/test_crtsh.py` — 8/8 passing. crt.sh tests use `respx` to mock httpx (parsing edge cases, retry-then-succeed, retry-exhaustion) — no live network in CI.
+- `src/poc_osint/liveness.py` — async liveness checker, implemented. `check_host_port()` (single HEAD request, never raises — failures become `HostResult(is_live=False, error=...)`) is separate from `check_hosts()` (concurrency orchestration: `asyncio.Semaphore`-bounded `max_concurrency`, per-request `delay` before each check — both exist for the ethics/DoS-avoidance requirement, not just throughput). `get_live_hosts()` wires both together, owning the client lifecycle. Port→scheme mapping (80→http, 443→https, fallback http) lives in `check_hosts`; `check_host_port` itself takes an explicit scheme so fixture ports (8081/8082/8083) work too. Headers are stored lowercased (httpx's own normalization) for case-insensitive lookups by the future header-parser module.
+- `tests/unit/` — `test_cli.py`, `test_crtsh.py`, `test_liveness.py` — 14/14 passing, `respx`-mocked, no live network. Liveness unit tests cover concurrency bound (tracks real max-concurrent in-flight requests) and per-request delay (via monkeypatched `asyncio.sleep`) deterministically.
+- `tests/integration/` — real Docker-fixture tests, implemented (`conftest.py` session fixture runs `docker-compose up`/`down` around the tests, polling until hosts respond). `test_liveness_fixtures.py` — 4/4 passing against real containers: healthy/vulnerable header profiles, dead-port detection, concurrent multi-port checks. Excluded from the default `pytest` run (`addopts = "-m 'not integration'"` in `pyproject.toml`, marker registered) — run explicitly via `pytest -m integration`, requires `dockerd` running.
 - `tests/fixtures/` — Docker fixtures (see above).
 - Dev venv: `code/poc-osint-venv/` (named for the project rather than generic `.venv`, gitignored). Setup: `python3 -m venv poc-osint-venv && poc-osint-venv/bin/pip install -e ".[dev]"`.
-- Verified end-to-end: `poc-osint-venv/bin/poc-osint lookup example.com` (exit 0), invalid domain (exit 1, stderr message), `pytest` — 8/8 passing. One-time manual live check of `get_subdomains()` against real crt.sh hit a genuine crt.sh outage (502, confirmed independently via `curl` — not a client bug); retry once crt.sh is back up to confirm real-world parsing.
+- Verified end-to-end: `poc-osint-venv/bin/poc-osint lookup example.com` (exit 0), invalid domain (exit 1, stderr message), `pytest` — 14/14 unit passing, 4/4 integration passing. One-time manual live check of crt.sh's `get_subdomains()` against real crt.sh hit a genuine crt.sh outage (502, confirmed independently via `curl` — not a client bug); retry once crt.sh is back up to confirm real-world parsing.
 
 ## Open decisions / immediate next steps
 
-1. Implement crt.sh client (subdomain enumeration, passive).
-2. Implement async liveness checker (concurrent HEAD/connect checks, configurable concurrency + delay).
-3. Implement header parser (security-header checklist + server/CMS fingerprint matching).
-4. Wire the above into `lookup`, add structured JSON + table output.
-5. Integration tests against the Docker fixtures (`tests/integration/`, not yet created).
+1. Implement header parser (security-header checklist + server/CMS fingerprint matching) — can reuse `HostResult.headers` from the liveness checker directly.
+2. Wire crt.sh + liveness + header parser into `lookup`, add structured JSON + table output.
+3. Integration tests for the crt.sh client and header parser against the fixtures (liveness integration tests already done).
 
 ## Working preferences
 

@@ -27,3 +27,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: requires the Docker fixtures in tests/fixtures/ to be running",
+]
+addopts = "-m 'not integration'"
