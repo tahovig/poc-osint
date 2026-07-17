@@ -13,6 +13,7 @@ dist/
 .venv/
 venv/
 env/
+poc-osint-venv/
 
 # Environment variables / secrets
 .env

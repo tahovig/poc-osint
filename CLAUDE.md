@@ -45,9 +45,23 @@ Automates initial recon against a target domain — gathers publicly available s
 - **Smoke test**: `example.com` (IANA-run, stable, exists for exactly this purpose).
 - Real-target demo (NASA VDP in-scope list, or a domain the user owns) deferred until later — not needed to start building.
 
+## Package skeleton
+
+Src-layout Python package at `code/`:
+- `pyproject.toml` — setuptools build, console script entry point `poc-osint = poc_osint.cli:main`. Runtime dep: `httpx`. Dev deps (`.[dev]`): `pytest`, `pytest-asyncio`, `respx`.
+- `src/poc_osint/cli.py` — argparse-based CLI, subcommand-structured (`poc-osint lookup <target>`). Only real functionality so far: domain-format validation; recon logic itself is not yet implemented (prints a placeholder message) — crt.sh client, liveness checker, and header parser modules don't exist yet, will be added when actually built rather than stubbed in advance.
+- `tests/unit/test_cli.py` — covers valid/invalid domain handling and missing-subcommand exit behavior.
+- `tests/fixtures/` — Docker fixtures (see above).
+- Dev venv: `code/poc-osint-venv/` (named for the project rather than generic `.venv`, gitignored). Setup: `python3 -m venv poc-osint-venv && poc-osint-venv/bin/pip install -e ".[dev]"`.
+- Verified end-to-end: `poc-osint-venv/bin/poc-osint lookup example.com` (exit 0), invalid domain (exit 1, stderr message), `pytest` — 3/3 passing.
+
 ## Open decisions / immediate next steps
 
-1. Build the actual CLI tool (`code/` package skeleton, crt.sh client, async liveness checker, header parser) against the fixtures above.
+1. Implement crt.sh client (subdomain enumeration, passive).
+2. Implement async liveness checker (concurrent HEAD/connect checks, configurable concurrency + delay).
+3. Implement header parser (security-header checklist + server/CMS fingerprint matching).
+4. Wire the above into `lookup`, add structured JSON + table output.
+5. Integration tests against the Docker fixtures (`tests/integration/`, not yet created).
 
 ## Working preferences
 
