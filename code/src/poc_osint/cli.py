@@ -7,7 +7,8 @@ import sys
 from .compare import compare_reports
 from .crtsh import CrtShError
 from .output import to_compare_json, to_compare_text, to_json, to_table
-from .recon import run_recon
+from .progress import Spinner
+from .recon import SubdomainReport, run_recon
 
 _DOMAIN_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})+$")
 
@@ -70,9 +71,7 @@ def _run_lookup(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        reports = asyncio.run(
-            run_recon(args.target, max_concurrency=args.max_concurrency, delay=args.delay)
-        )
+        reports = asyncio.run(_run_recon_with_spinner(args))
     except CrtShError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -90,6 +89,20 @@ def _run_lookup(args: argparse.Namespace) -> int:
 
     print(to_json(reports) if args.json else to_table(reports))
     return 0
+
+
+async def _run_recon_with_spinner(args: argparse.Namespace) -> list[SubdomainReport]:
+    spinner = Spinner()
+    spinner.start()
+    try:
+        return await run_recon(
+            args.target,
+            max_concurrency=args.max_concurrency,
+            delay=args.delay,
+            on_progress=spinner.update,
+        )
+    finally:
+        await spinner.stop()
 
 
 def _run_compare(args: argparse.Namespace) -> int:

@@ -78,3 +78,37 @@ async def test_run_recon_passes_through_concurrency_and_delay(monkeypatch):
     await run_recon("example.com", max_concurrency=3, delay=0.1)
 
     assert captured_kwargs == {"max_concurrency": 3, "delay": 0.1}
+
+
+async def test_run_recon_reports_progress_through_each_stage(monkeypatch):
+    messages = []
+
+    async def fake_get_subdomains(domain):
+        return {"www.example.com"}
+
+    async def fake_get_live_hosts(hosts, **kwargs):
+        return [LIVE_HEALTHY]
+
+    monkeypatch.setattr("poc_osint.recon.get_subdomains", fake_get_subdomains)
+    monkeypatch.setattr("poc_osint.recon.get_live_hosts", fake_get_live_hosts)
+
+    await run_recon("example.com", on_progress=messages.append)
+
+    assert any("crt.sh" in m for m in messages)
+    assert any("liveness" in m.lower() for m in messages)
+    assert any("header" in m.lower() for m in messages)
+
+
+async def test_run_recon_progress_is_optional(monkeypatch):
+    async def fake_get_subdomains(domain):
+        return {"example.com"}
+
+    async def fake_get_live_hosts(hosts, **kwargs):
+        return [LIVE_HEALTHY]
+
+    monkeypatch.setattr("poc_osint.recon.get_subdomains", fake_get_subdomains)
+    monkeypatch.setattr("poc_osint.recon.get_live_hosts", fake_get_live_hosts)
+
+    reports = await run_recon("example.com")  # no on_progress -- must not raise
+
+    assert len(reports) == 1

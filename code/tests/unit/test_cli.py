@@ -102,7 +102,8 @@ def test_lookup_passes_through_max_concurrency_and_delay(monkeypatch):
 
     main(["lookup", "example.com", "--max-concurrency", "5", "--delay", "0.5"])
 
-    assert captured_kwargs == {"max_concurrency": 5, "delay": 0.5}
+    assert captured_kwargs["max_concurrency"] == 5
+    assert captured_kwargs["delay"] == 0.5
 
 
 def test_lookup_save_writes_json_file(monkeypatch, tmp_path):
