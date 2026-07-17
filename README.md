@@ -1,6 +1,6 @@
 # poc-osint — Automated Corporate Footprint & Subdomain Recon Tool
 
-[![CI](https://github.com/tahovig/poc-osint/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/tahovig/poc-osint/actions/workflows/ci.yml)
+[![CI](https://github.com/tahovig/poc-osint/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tahovig/poc-osint/actions/workflows/ci.yml)
 
 A Python CLI that automates initial reconnaissance against a target domain: gathers publicly available subdomains, validates active hosts, and extracts open-source metadata (server/CMS fingerprints, missing security headers). Models the workflow a threat intel analyst or pentester uses to map an organization's external attack surface and spot forgotten or rogue shadow IT assets.
 
@@ -16,7 +16,7 @@ This tool performs active checks (HTTP requests to discovered hosts) in addition
 
 ## How it works
 
-1. **Subdomain enumeration** — queries certificate transparency logs via [crt.sh](https://crt.sh) for the target domain. Passive, public data only. Retries with backoff since crt.sh is known to be flaky/rate-limited.
+1. **Subdomain enumeration** — queries certificate transparency logs via [crt.sh](https://crt.sh) for the target domain. Passive, public data only. Retries with backoff since crt.sh's HTTP frontend is known to be flaky/rate-limited; if it still fails, falls back to querying crt.sh's own public read-only Postgres database directly (same data, a different and more reliable transport), rather than surfacing an error the first time crt.sh's website has a bad moment.
 2. **Liveness check** — concurrently HEAD-checks each discovered subdomain on ports 80/443. Concurrency and per-request delay are both configurable, specifically to avoid hammering the target.
 3. **Header analysis** — for live hosts, checks a fixed security-header checklist (`Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) and flags a short list of known `Server`/`X-Powered-By` signatures (Apache, nginx, IIS, PHP, ASP.NET, Express, Cloudflare).
 

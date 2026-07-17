@@ -86,11 +86,20 @@ User asked to keep visualization in mind while building CI; this is that feature
 2. `lookup --save PATH` (always saves JSON, regardless of the stdout format flag) + `poc-osint compare old.json new.json` (`+`/`-`/`~` diff, or `--json`) — the "aggregate/compare over time" piece, mapping directly onto the tool's "shadow IT drift" purpose rather than being cosmetic. `compare_reports()` deliberately works on plain loaded-JSON dicts, not reconstructed `SubdomainReport` objects — dict equality is all a diff needs.
 3. A live ASCII spinner (`progress.py`) during `lookup` itself, showing which stage is running (crt.sh query / liveness checks / header analysis) rather than a silent hang — the user's direct request, drawing an analogy to Claude Code's own "thinking" indicator.
 
+## Portfolio-readiness pass
+
+User asked "what's left before this is portfolio-ready" once the core tool + visualization + spinner were all done. Audited and fixed:
+- Added `LICENSE` (MIT, copyright Theodore Hovig 2026) — repo had none.
+- Fixed the CI badge in README: was `?branch=develop`, but GitHub's actual default branch is `main` (confirmed via `gh repo view`) — badge was showing the wrong branch's status to anyone landing on the repo homepage.
+- Updated the GitHub repo description (was a generic placeholder: "This is a project to automate OSINT processes") and added topics (`osint`, `cybersecurity`, `python`, `security-tools`, `recon`, `subdomain-enumeration`) for profile discoverability — both were unset.
+- README's "How it works" now mentions the crt.sh Postgres fallback, previously undocumented despite being one of the more interesting engineering decisions in the repo.
+- `resources/` had only a `.gitkeep` with no explanation; replaced with a short `README.md` describing its (currently unused) purpose.
+- Considered a real terminal-recording GIF/SVG for the README to show the spinner in action; user chose to keep the text-only example output (no new tooling dependency) since it's already accurate and matches the project's dependency-light style.
+- Deliberately not done: a real-target demo beyond `example.com` (NASA VDP in-scope list, or a domain the user owns) — always treated as optional once a live, real-DNS target proved the pipeline works, which it has.
+
 ## Open decisions / immediate next steps
 
-The core tool is functionally complete end-to-end (crt.sh → liveness → headers → output), with CI green on GitHub, a working crt.sh fallback path, and results visualization/comparison. `main` was last synced through the Postgres-fallback commit — the visualization/compare work in this section is on `develop` only so far.
-1. README doesn't yet document `--save`/`compare` or the checklist grid — needs an update pass.
-2. Merge `develop` into `main` once this round's changes are committed.
+Core tool + visualization + spinner + this portfolio-readiness pass are all committed. Once verified, merge `develop` into `main` (same fast-forward pattern as every round so far).
 
 ## Working preferences
 
